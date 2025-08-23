@@ -11,7 +11,6 @@ editor_options:
 ---
 
 ## notes
-1. make seperate repo for this tutorial
 2. create simplified data (colnames in spanish, reduce columns)
 
 ## Libraries
@@ -22,13 +21,13 @@ Install and load necessary libraries. We will use the _fixest_ package in R thro
 library(ggplot2)
 library(dplyr)
 library(fixest)
-# you can find nice fixest documentation help here:
-#     
+# you can find nice fixest documentation here:
+# https://lrberge.github.io/fixest/articles/fixest_walkthrough.html#instrumental-variables    
 ```
 
 ## Load data
 
-First, load in the two necessary datasets (one for dengue and one for leish). These are the cleaned datasets with all pre-processing done. You can reference the full repository for data processing steps. This example workflow will use the dengue data, but you can switch out for leish data if you want.
+First, load in the two necessary datasets (one for dengue and one for leish). These are the cleaned datasets with all pre-processing done. They are the datasets used in the main analysis of Singleton et al., 2025 (i.e., some health facilities are removed, see Figure 1). You can reference the full repository for data processing steps. This example workflow will use the dengue data, but you can switch out for leish data if you want.
 
 ```{r}
 dengue_yearly <- readRDS("data/clean/dengue_yearly_panels.rds")
@@ -40,7 +39,7 @@ leish_yearly <- leish_yearly$connected_buffered
 
 ## Explore data
 
-Let's check out the structure of the data. You can see the data is in long format, where we have a time column (year) and a unit column (e_salud).  
+Let's look at the structure of the data. You can see the data is in long format, where we have a time column (year) and a unit column (e_salud).  
 
 ```{r}
 # look at column names and data structure
@@ -57,7 +56,7 @@ table(dengue_yearly$key)
 
 ```
 
-Take a second to explore the dengue data by plotting incidence over time. First, create a plot showing dengue incidence for each health facility over time, colored by exposure group. Next, aggregate the groups and plot mean incidence over time for each exposure group.
+Take a second to explore the dengue data by plotting incidence over time. First, create a plot showing dengue incidence for each health facility over time, colored by exposure group.
 
 ```{r}
 # plot incidence for each health facility across study period, color by treatment (<5km) and control (>10km)
@@ -70,7 +69,7 @@ dengue_yearly_plotting$fivekm <- as.character(dengue_yearly_plotting$fivekm)
 ggplot(dengue_yearly_plotting) +
   geom_line(aes(year_chr, incidence, group=key, color=fivekm), alpha=0.7) +
   scale_color_manual(values = c('darkblue', 'pink2'), 
-                     labels = c("Control", "Exposed"), 
+                     labels = c("Control (>10km)", "Exposed (<5km)"), 
                      name="Group") +
   geom_vline(xintercept='2008',linetype='dashed') +
   xlab("Year") + ylab("Dengue\nincidence\n per 1k") +
@@ -78,6 +77,8 @@ ggplot(dengue_yearly_plotting) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
         axis.title.y = element_text(angle = 0, vjust = 0.5))
 ```
+
+Next, aggregate the exposure groups and plot mean incidence over time for each exposure group.
 
 ```{r}
 # aggregate by treatment and control group and plot mean incidence rates across the study period
@@ -90,7 +91,7 @@ dengue_yearly_plotting_agg$fivekm <- as.character(dengue_yearly_plotting_agg$fiv
 ggplot(dengue_yearly_plotting_agg) +
   geom_line(aes(year_chr, mean_incidence, group = fivekm, color=fivekm)) +
   scale_color_manual(values = c('darkblue', 'pink2'),
-                     labels = c("Control", "Exposed"), 
+                     labels = c("Control (>10km)", "Exposed (<5km)"), 
                      name="Group") +
   geom_vline(xintercept='2008',linetype='dashed') +
   xlab("Year") + ylab("Dengue\nincidence\n per 1k") +
@@ -101,18 +102,20 @@ ggplot(dengue_yearly_plotting_agg) +
 
 ## Build simple model
 
-Let's start with the simplest DiD model possible: only including the interaction term that compares the treatment and control group within each year to their difference in our reference year, 2008. There are currently no fixed effects and no control variables.
+Let's start with the simplest DiD model possible: only including the interaction term that compares the treatment and control group within each year to their difference in our reference year, 2008. There are currently no fixed effects and no control variables. Here, $i(year, fivekm, ref = '2008')$ creates a set of interaction terms: a binary (dummy) variable for each year, but excluding year 2008 as the reference.
 
 ```{r}
 # run model
 dengue_yearly_model_simple <- feols(
-  incidence ~ i(year_chr, fivekm, ref = '2008'), # tx/year interaction
+  incidence ~ i(year_chr, fivekm, ref = '2008'), # time*treatment interaction
   data = dengue_yearly)
 
 # look at output
 summary(dengue_yearly_model_simple)
-fixest::etable(dengue_yearly_model_simple)
-fixest::iplot(dengue_yearly_model_simple, 
+#fixest function to create a table with standard formatting
+etable(dengue_yearly_model_simple) 
+#fixest function to create a figure for time*treatment interaction terms
+iplot(dengue_yearly_model_simple, 
               main = "Effect on dengue incidence",
               xlab= "Year", ylab = "Effect (relative to 2008)")
 ```
@@ -124,7 +127,7 @@ Now let's add unit and year fixed effects to our model. As a reminder, unit fixe
 ```{r}
 # run model
 dengue_yearly_model_FEs <- feols(
-  incidence ~ i(year_chr, fivekm, ref = '2008') | # tx/year interaction
+  incidence ~ i(year_chr, fivekm, ref = '2008') | # time*treatment interaction
     key + year_chr, # fixed effects
   data = dengue_yearly)
 
@@ -143,7 +146,7 @@ Finally, let's add in control variables. Here, we include urban area, agricultur
 ```{r}
 # run model
 dengue_yearly_model_full <- feols(
-  incidence ~ i(year_chr, fivekm, ref = '2008') + # tx/year interaction
+  incidence ~ i(year_chr, fivekm, ref = '2008') + # time*treatment interaction
     urban + ag + sum_precip_centered + #controls
     mean_temp_centered + mean_temp_centered_sq | 
     key + year_chr, # fixed effects
@@ -171,7 +174,7 @@ dengue_df_agg <- dengue_yearly %>%
 
 # run model
 dengue_long_difference_model <- feols(
-  incidence ~ year_binary * fivekm + # tx/period interaction
+  incidence ~ year_binary * fivekm + # time*treatment interaction
     urban + ag + sum_precip_centered + #controls
     mean_temp_centered + mean_temp_centered_sq | 
     key + year_binary, # fixed effects
@@ -185,4 +188,4 @@ etable(dengue_long_difference_model)
 coef(dengue_long_difference_model)[6] 
 ```
 
-If you have extra time, you can try running the models for leishmaniasis as well! Alternatively, you can look through the full GitHub here and try out some of the other models, such as biannual or the distance heterogeneity analyses.
+If you have extra time, you can try running the models for leishmaniasis as well! Alternatively, you can look through the full GitHub code and try out some of the other models, such as the biannual or distance heterogeneity analyses.
