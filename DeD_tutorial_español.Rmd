@@ -35,6 +35,20 @@ leish_tutorial_df <- readRDS("./data/leish_tutorial_df.rds")
 
 Veamos la estructura de los datos. Como puede ver, los datos están en formato largo, donde tenemos una columna de tiempo (año) y una columna de unidad (e_salud).
 
+También tenemos nuestra columna "tratamiento," denominada "dist_tx." Si dist_tx = 1, entonces el establecimiento de salud se encuentra a menos de 5 km de la carretera. Si dist_tx = 0, entonces el establecimiento de salud se encuentra a más de 10 km de la carretera. Hemos eliminado los establecimientos de salud situados a más de 5 km pero a menos de 10 km para minimizar el efecto de contagio espacial del tratamiento.
+
+Aquí hay un diccionario de datos:
+
+-   año: 2000-2022
+-   e_salud: Etiquetas exclusivas para los diferentes establecimientos sanitarios.
+-   incidencia: Incidencia de dengue por cada 1.000 personas en cada establecimiento para cada año (casos/hab\*1000).
+-   dist_tx: Igual a 1 cuando el establecimiento de salud se encuentra a menos de 5 km de la carretera. Igual a 0 cuando el establecimiento de salud se encuentra a más de 10 km de la carretera. Nuesto variable de "tratemiento" or "exposición."
+-   urbano: Zona urbana total en un radio de 7,5 km\^2 alrededor de cada establecimiento sanitario para cada año (m\^2).
+-   agricola: Zona agricola total en un radio de 7,5 km\^2 alrededor de cada establecimiento sanitario para cada año (m\^2).
+-   temp: Temperatura media de cada establecimiento de salud para cada año, centrada en torno a su media para ayudar con la colinealidad (K).
+-   temp_cuad: Temperatura media al cuadrado de cada establecimiento de salud para cada año, centrada en torno a su media para ayudar con la colinealidad (K).
+-   precip: Precipitación acumulada de cada establecimiento de salud para cada año, centrada en torno a su media para ayudar con la colinealidad (mm).
+
 ```{r}
 # mira los nombres de las columnas y la estructura de datos
 colnames(dengue_tutorial_df)
@@ -43,7 +57,7 @@ View(dengue_tutorial_df)
 
 # esto muestra que tenemos 81 unidades para cada año
 table(dengue_tutorial_df$año)
-# esto significa que tenemos 23 años para cada centro de salud.
+# esto significa que tenemos 23 años para cada establecimiento de salud.
 table(dengue_tutorial_df$e_salud)
 
 # observar la distribución del "tratamiento" durante un año 
@@ -57,17 +71,17 @@ tx_col <- dengue_tutorial_df %>%
 table(tx_col$dist_tx)
 ```
 
-Tómese un momento para explorar los datos sobre el dengue creando un gráfico de incidencia a lo largo del tiempo. En primer lugar, cree un gráfico que muestre la incidencia del dengue en cada centro de salud a lo largo del tiempo, coloreado por grupo de exposición.
+Tómese un momento para explorar los datos sobre el dengue creando un gráfico de incidencia a lo largo del tiempo. En primer lugar, cree un gráfico que muestre la incidencia del dengue en cada establecimiento de salud a lo largo del tiempo, coloreado por grupo de exposición.
 
 ```{r}
-# crear una figura con la incidencia de cada centro de salud durante el periodo de estudio, coloreada según el tratamiento (<5 km) y el control (>10 km)
+# crear una figura con la incidencia de cada establecimiento de salud durante el periodo de estudio, coloreada según el tratamiento (<5 km) y el control (>10 km)
 
 # Queremos que el tratamiento sea un vector de caracteres para las figuras 
 #   (pero numérico para ejecutar los modelos).
 dengue_tutorial_df_figura <- dengue_tutorial_df
 dengue_tutorial_df_figura$dist_tx <- as.character(dengue_tutorial_df_figura$dist_tx) 
 
-# gráfico de incidencia para cada centro de salud
+# gráfico de incidencia para cada establecimiento de salud
 ggplot(dengue_tutorial_df_figura) +
   geom_line(aes(año, incidencia, group=e_salud, color=dist_tx), alpha=0.7) +
   scale_color_manual(values = c('darkblue', 'pink2'), 
@@ -104,7 +118,7 @@ ggplot(dengue_tutorial_df_figura_ag) +
 
 ## Construir un modelo sencillo
 
-Comencemos con el modelo DeD más simple posible: incluyendo solo el término de interacción que compara el grupo de tratamiento y el grupo de control dentro de cada año con su diferencia en nuestro año de referencia (2008). Actualmente no hay efectos fijos ni variables de control. Aquí, $i(año, dist_tx, ref = '2008')$ crea un conjunto de términos de interacción: una variable binaria (ficticia) para cada año que interactúa con la columna de tratamiento (dist_tx), pero excluyendo el año 2008 como referencia.
+Comencemos con el modelo DeD más simple posible: incluyendo solo el término de interacción que compara el grupo de tratamiento y el grupo de control dentro de cada año con su diferencia en nuestro año de referencia (2008). Actualmente no hay efectos fijos ni variables de control. Aquí, i(año, dist_tx, ref = '2008') crea un conjunto de términos de interacción: una variable binaria (ficticia) para cada año que interactúa con la columna de tratamiento (dist_tx), pero excluyendo el año 2008 como referencia.
 
 ```{r}
 # ejecutar modelo
@@ -141,9 +155,9 @@ iplot(dengue_tutorial_modelo_EFs,
               xlab= "Año", ylab = "Efecto (en relación con 2008)")
 ```
 
-## modelo completo (EFs + controles)
+## Modelo completo (EFs + controles)
 
-Por último, añadamos variables de control. Aquí incluimos área urbana, área agrícola, precipitación, temperatura y temperatura^2. ¿Notas algún cambio?
+Por último, añadamos variables de control. Aquí incluimos área urbana, área agrícola, precipitación, temperatura y temperatura\^2. ¿Notas algún cambio?
 
 ```{r}
 # ejecutar modelo
@@ -161,7 +175,7 @@ iplot(dengue_tutorial_modelo_EFs,
               xlab= "Año", ylab = "Efecto (en relación con 2008)")
 ```
 
-## modelo de diferencia larga (long difference modelo)
+## Modelo de diferencia larga (long difference modelo)
 
 Extra: Aquí está el código para estimar el efecto global del tratamiento a lo largo de todo el periodo, en lugar de una estimación del efecto para cada año. Esto se denomina modelo de diferencia larga.
 
@@ -188,4 +202,4 @@ etable(dengue_modelo_diferencia_larga)
 coef(dengue_modelo_diferencia_larga)[6]
 ```
 
-Si tienes tiempo extra, también puedes probar los modelos para la leishmaniasis. Otra opción es revisar el código completo de GitHub y probar algunos de los otros modelos, como el bianual (**code/07_main_modelos_fixest.R**) o los análisis de heterogeneidad de distancia (**code/10_distance_het_modelos.R**). Ten en cuenta que tendrás que descargar el conjunto de datos completo para crear los modelos de heterogeneidad de distancia. El repositorio del proyecto se encuentra aquí: https://github.com/alyson-singleton/IOH_and_dengue.
+Si tienes tiempo extra, también puedes probar los modelos para la leishmaniasis. Otra opción es revisar el código completo de GitHub y probar algunos de los otros modelos, como el bianual (**code/07_main_modelos_fixest.R**) o los análisis de heterogeneidad de distancia (**code/10_distance_het_modelos.R**). Ten en cuenta que tendrás que descargar el conjunto de datos completo para crear los modelos de heterogeneidad de distancia. El repositorio del proyecto se encuentra aquí: <https://github.com/alyson-singleton/IOH_and_dengue>.
