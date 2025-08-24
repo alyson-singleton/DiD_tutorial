@@ -10,4 +10,182 @@ editor_options:
   chunk_output_type: console
 ---
 
+## Bibliotecas (Libraries)
 
+Instale y cargue las bibliotecas necesarias. Usaremos el paquete *fixest* en R a lo largo de este tutorial, que es un paquete muy común para trabajar con datos de panel.
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(fixest)
+# puede encontrar buena documentación de fixest aquí:
+# https://lrberge.github.io/fixest/articles/fixest_walkthrough.html#instrumental-variables    
+```
+
+## Cargar datos
+
+En primer lugar, cargue los dos conjuntos de datos necesarios (uno para el dengue y otro para la leishmaniasis). Se trata de conjuntos de datos limpios, con todo el preprocesamiento realizado y etiquetados en español. Son los conjuntos de datos utilizados en el análisis principal de Singleton et al., 2025 (es decir, se han eliminado algunos establecimientos de salud, véase la figura 1). Puede consultar el repositorio completo para conocer los pasos del procesamiento de datos. Este ejemplo de flujo de trabajo utilizará los datos del dengue, pero puede cambiar a los datos de la leishmaniasis si lo desea.
+
+```{r}
+dengue_tutorial_df <- readRDS("./data/dengue_tutorial_df.rds")
+leish_tutorial_df <- readRDS("./data/leish_tutorial_df.rds")
+```
+
+## Explora los datos
+
+Veamos la estructura de los datos. Como puede ver, los datos están en formato largo, donde tenemos una columna de tiempo (año) y una columna de unidad (e_salud).
+
+```{r}
+# mira los nombres de las columnas y la estructura de datos
+colnames(dengue_tutorial_df)
+head(dengue_tutorial_df)
+View(dengue_tutorial_df)
+
+# esto muestra que tenemos 81 unidades para cada año
+table(dengue_tutorial_df$año)
+# esto significa que tenemos 23 años para cada centro de salud.
+table(dengue_tutorial_df$e_salud)
+
+# observar la distribución del "tratamiento" durante un año 
+#   (la asignación del tratamiento es estable durante todo el periodo de estudio)
+tx_col <- dengue_tutorial_df %>% 
+  filter(año == "2001") %>%
+  select(dist_tx, e_salud)
+
+# esto muestra que 45 de nuestras unidades están "tratadas (1)" y
+#   36 están "controles (0)".
+table(tx_col$dist_tx)
+```
+
+Tómese un momento para explorar los datos sobre el dengue creando un gráfico de incidencia a lo largo del tiempo. En primer lugar, cree un gráfico que muestre la incidencia del dengue en cada centro de salud a lo largo del tiempo, coloreado por grupo de exposición.
+
+```{r}
+# crear una figura con la incidencia de cada centro de salud durante el periodo de estudio, coloreada según el tratamiento (<5 km) y el control (>10 km)
+
+# Queremos que el tratamiento sea un vector de caracteres para las figuras 
+#   (pero numérico para ejecutar los modelos).
+dengue_tutorial_df_figura <- dengue_tutorial_df
+dengue_tutorial_df_figura$dist_tx <- as.character(dengue_tutorial_df_figura$dist_tx) 
+
+# gráfico de incidencia para cada centro de salud
+ggplot(dengue_tutorial_df_figura) +
+  geom_line(aes(año, incidencia, group=e_salud, color=dist_tx), alpha=0.7) +
+  scale_color_manual(values = c('darkblue', 'pink2'), 
+                     labels = c("Control\n(>10km)", "Tratamiento\n(<5km)"), 
+                     name="Grupo") +
+  geom_vline(xintercept='2008',linetype='dashed') +
+  xlab("Año") + ylab("Incidencia\nde dengue\n por 1k") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.title.y = element_text(angle = 0, vjust = 0.5))
+```
+
+A continuación, agregue los grupos de exposición y trace la incidencia media a lo largo del tiempo para cada grupo de exposición.
+
+```{r}
+# agregar por grupo de tratamiento y control y trazar las tasas de incidencia medias a lo largo del periodo de estudio.
+dengue_tutorial_df_figura_ag <- dengue_tutorial_df %>%
+  group_by(dist_tx, año) %>%
+  summarize(incidencia_media = mean(incidencia))
+dengue_tutorial_df_figura_ag$dist_tx <- as.character(dengue_tutorial_df_figura_ag$dist_tx)
+
+# incidence plot for aggregated treatment groups
+ggplot(dengue_tutorial_df_figura_ag) +
+  geom_line(aes(año, incidencia_media, group = dist_tx, color=dist_tx)) +
+  scale_color_manual(values = c('darkblue', 'pink2'), 
+                     labels = c("Control\n(>10km)", "Tratamiento\n(<5km)"), 
+                     name="Grupo") +
+  geom_vline(xintercept='2008',linetype='dashed') +
+  xlab("Año") + ylab("Incidencia\nde dengue\n por 1k") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.title.y = element_text(angle = 0, vjust = 0.5))
+```
+
+## Construir un modelo sencillo
+
+Comencemos con el modelo DeD más simple posible: incluyendo solo el término de interacción que compara el grupo de tratamiento y el grupo de control dentro de cada año con su diferencia en nuestro año de referencia (2008). Actualmente no hay efectos fijos ni variables de control. Aquí, $i(año, dist_tx, ref = '2008')$ crea un conjunto de términos de interacción: una variable binaria (ficticia) para cada año que interactúa con la columna de tratamiento (dist_tx), pero excluyendo el año 2008 como referencia.
+
+```{r}
+# ejecutar modelo
+dengue_tutorial_modelo_sencillo <- feols(
+  incidencia ~ i(año, dist_tx, ref = '2008'), # interacción tiempo*tratamiento
+  data = dengue_tutorial_df)
+
+# mira el resultado
+summary(dengue_tutorial_modelo_sencillo)
+# función fixest para crear una tabla con formato estándar
+etable(dengue_tutorial_modelo_sencillo) 
+# función fixest para crear una figura para los términos de interacción tiempo*tratamiento
+iplot(dengue_tutorial_modelo_sencillo, 
+              main = "Efecto sobre la incidencia del dengue",
+              xlab= "Año", ylab = "Efecto (en relación con 2008)")
+```
+
+## Añadir efectos fijos
+
+Ahora agreguemos efectos fijos unidades y años a nuestro modelo. Como recordatorio, los efectos fijos unidades controlan las características invariables en el tiempo a nivel de las establecimientos (carga basal del dengue, idoneidad para los vectores, etc.). Los efectos fijos años controlan los cambios anuales comunes que afectan a todas las establecimientos de salud simultáneamente (en particular, años lluviosos, cambios en la política nacional/regional, etc.). ¿Qué cambios observa?
+
+```{r}
+# ejecutar modelo
+dengue_tutorial_modelo_EFs <- feols(
+  incidencia ~ i(año, dist_tx, ref = '2008') | # interacción tiempo*tratamiento
+  e_salud + año, # efectos fijos
+  data = dengue_tutorial_df)
+
+# mira el resultado
+summary(dengue_tutorial_modelo_EFs)
+etable(dengue_tutorial_modelo_EFs) 
+iplot(dengue_tutorial_modelo_EFs, 
+              main = "Efecto sobre la incidencia del dengue",
+              xlab= "Año", ylab = "Efecto (en relación con 2008)")
+```
+
+## modelo completo (EFs + controles)
+
+Por último, añadamos variables de control. Aquí incluimos área urbana, área agrícola, precipitación, temperatura y temperatura^2. ¿Notas algún cambio?
+
+```{r}
+# ejecutar modelo
+dengue_tutorial_modelo_EFs <- feols(
+  incidencia ~ i(año, dist_tx, ref = '2008') + # interacción tiempo*tratamiento
+    urbano + agricola + temp + temp_cuad + precip | # variables de control
+  e_salud + año, # efectos fijos
+  data = dengue_tutorial_df)
+
+# mira el resultado
+summary(dengue_tutorial_modelo_EFs)
+etable(dengue_tutorial_modelo_EFs) 
+iplot(dengue_tutorial_modelo_EFs, 
+              main = "Efecto sobre la incidencia del dengue",
+              xlab= "Año", ylab = "Efecto (en relación con 2008)")
+```
+
+## modelo de diferencia larga (long difference modelo)
+
+Extra: Aquí está el código para estimar el efecto global del tratamiento a lo largo de todo el periodo, en lugar de una estimación del efecto para cada año. Esto se denomina modelo de diferencia larga.
+
+El cambio principal es cómo construimos la columna "tiempo." Para crear el modelo de diferencia larga, creamos una nueva columna "tiempo" de modo que el año 2008 sea 0 (nuestro año de referencia) y todos los demás años posteriores a 2008 sean 1. Eliminamos los años anteriores a 2008 porque queremos que nuestro control sea solo 2008 (no 2000-2008). Esto compara todo el grupo de años posteriores a la pavimentación con nuestro año de referencia, en lugar de comparar cada uno de ellos con el año de referencia uno por uno.
+
+```{r}
+# crear nueva variable de tratamiento para el modelo de diferencia larga
+dengue_tutorial_df_ag <- dengue_tutorial_df %>%
+  filter(año %in% as.character(c(2008:2022))) %>%
+  mutate(año_binario = if_else(año == "2008", 0, 1))
+
+# ejecutar modelo
+dengue_modelo_diferencia_larga <- feols(
+  incidencia ~ año_binario * dist_tx + # interacción tiempo*tratamiento
+    urbano + agricola + temp + temp_cuad + precip | # variables de control
+  e_salud + año, # efectos fijos
+  data = dengue_tutorial_df_ag)
+
+# mira el resultado
+summary(dengue_modelo_diferencia_larga)
+etable(dengue_modelo_diferencia_larga) 
+
+# nuestro efecto medio del tratamiento a lo largo del periodo de tiempo
+coef(dengue_modelo_diferencia_larga)[6]
+```
+
+Si tienes tiempo extra, también puedes probar los modelos para la leishmaniasis. Otra opción es revisar el código completo de GitHub y probar algunos de los otros modelos, como el bianual (**code/07_main_modelos_fixest.R**) o los análisis de heterogeneidad de distancia (**code/10_distance_het_modelos.R**). Ten en cuenta que tendrás que descargar el conjunto de datos completo para crear los modelos de heterogeneidad de distancia. El repositorio del proyecto se encuentra aquí: https://github.com/alyson-singleton/IOH_and_dengue.

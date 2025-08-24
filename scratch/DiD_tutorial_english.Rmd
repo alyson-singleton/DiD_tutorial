@@ -27,11 +27,8 @@ library(fixest)
 First, load in the two necessary datasets (one for dengue and one for leish). These are the cleaned datasets with all pre-processing done. They are the datasets used in the main analysis of Singleton et al., 2025 (i.e., some health facilities are removed, see Figure 1). You can reference the full repository for data processing steps. This example workflow will use the dengue data, but you can switch out for leish data if you want.
 
 ```{r}
-dengue_yearly <- readRDS("data/clean/dengue_yearly_panels.rds")
-dengue_yearly <- dengue_yearly$connected_buffered
-dengue_yearly$year_chr <- substr(as.character(dengue_yearly$year),1,4)
-leish_yearly <- readRDS("data/clean/leish_yearly_panels.rds")
-leish_yearly <- leish_yearly$connected_buffered
+dengue_tutorial_df <- readRDS("./scratch/dengue_tutorial_df_english.rds")
+leish_tutorial_df <- readRDS("./scratch/leish_tutorial_df_english.rds")
 ```
 
 ## Explore data
@@ -40,17 +37,23 @@ Let's look at the structure of the data. You can see the data is in long format,
 
 ```{r}
 # look at column names and data structure
-colnames(dengue_yearly)
-head(dengue_yearly)
-View(dengue_yearly)
+colnames(dengue_tutorial_df)
+head(dengue_tutorial_df)
+View(dengue_tutorial_df)
 
 # this shows we have 81 units for each time period
-table(dengue_yearly$year)
+table(dengue_tutorial_df$year)
 # this shows we have 23 years for each health facility
-table(dengue_yearly$key)
+table(dengue_tutorial_df$key)
 
-# "treatment" column
-
+# look at "treatment" distribution for one year 
+#   (treatment assignment is stable throughout study period)
+tx_col <- dengue_tutorial_df %>% 
+  filter(year == "2001") %>%
+  select(fivekm, key)
+# this shows that 45 of our units are labeled as "treated (1)" and
+#   36 are labeled as "control (0)"
+table(tx_col$fivekm)
 ```
 
 Take a second to explore the dengue data by plotting incidence over time. First, create a plot showing dengue incidence for each health facility over time, colored by exposure group.
@@ -59,12 +62,12 @@ Take a second to explore the dengue data by plotting incidence over time. First,
 # plot incidence for each health facility across study period, color by treatment (<5km) and control (>10km)
 
 # we want treatment to be a character vector for plotting (but numeric for running the models)
-dengue_yearly_plotting <- dengue_yearly
-dengue_yearly_plotting$fivekm <- as.character(dengue_yearly_plotting$fivekm) 
+dengue_tutorial_df_plotting <- dengue_tutorial_df
+dengue_tutorial_df_plotting$fivekm <- as.character(dengue_tutorial_df_plotting$fivekm) 
 
 # incidence plot for each health facility
-ggplot(dengue_yearly_plotting) +
-  geom_line(aes(year_chr, incidence, group=key, color=fivekm), alpha=0.7) +
+ggplot(dengue_tutorial_df_plotting) +
+  geom_line(aes(year, incidence, group=key, color=fivekm), alpha=0.7) +
   scale_color_manual(values = c('darkblue', 'pink2'), 
                      labels = c("Control (>10km)", "Exposed (<5km)"), 
                      name="Group") +
@@ -79,14 +82,14 @@ Next, aggregate the exposure groups and plot mean incidence over time for each e
 
 ```{r}
 # aggregate by treatment and control group and plot mean incidence rates across the study period
-dengue_yearly_plotting_agg <- dengue_yearly %>%
-  group_by(fivekm, year_chr) %>%
+dengue_tutorial_df_plotting_agg <- dengue_tutorial_df %>%
+  group_by(fivekm, year) %>%
   summarize(mean_incidence = mean(incidence))
-dengue_yearly_plotting_agg$fivekm <- as.character(dengue_yearly_plotting_agg$fivekm)
+dengue_tutorial_df_plotting_agg$fivekm <- as.character(dengue_tutorial_df_plotting_agg$fivekm)
 
 # incidence plot for aggregated treatment groups
-ggplot(dengue_yearly_plotting_agg) +
-  geom_line(aes(year_chr, mean_incidence, group = fivekm, color=fivekm)) +
+ggplot(dengue_tutorial_df_plotting_agg) +
+  geom_line(aes(year, mean_incidence, group = fivekm, color=fivekm)) +
   scale_color_manual(values = c('darkblue', 'pink2'),
                      labels = c("Control (>10km)", "Exposed (<5km)"), 
                      name="Group") +
@@ -103,16 +106,16 @@ Let's start with the simplest DiD model possible: only including the interaction
 
 ```{r}
 # run model
-dengue_yearly_model_simple <- feols(
-  incidence ~ i(year_chr, fivekm, ref = '2008'), # time*treatment interaction
-  data = dengue_yearly)
+dengue_tutorial_df_model_simple <- feols(
+  incidence ~ i(year, fivekm, ref = '2008'), # time*treatment interaction
+  data = dengue_tutorial_df)
 
 # look at output
-summary(dengue_yearly_model_simple)
+summary(dengue_tutorial_df_model_simple)
 #fixest function to create a table with standard formatting
-etable(dengue_yearly_model_simple) 
+etable(dengue_tutorial_df_model_simple) 
 #fixest function to create a figure for time*treatment interaction terms
-iplot(dengue_yearly_model_simple, 
+iplot(dengue_tutorial_df_model_simple, 
               main = "Effect on dengue incidence",
               xlab= "Year", ylab = "Effect (relative to 2008)")
 ```
@@ -123,15 +126,15 @@ Now let's add unit and year fixed effects to our model. As a reminder, unit fixe
 
 ```{r}
 # run model
-dengue_yearly_model_FEs <- feols(
-  incidence ~ i(year_chr, fivekm, ref = '2008') | # time*treatment interaction
-    key + year_chr, # fixed effects
-  data = dengue_yearly)
+dengue_tutorial_df_model_FEs <- feols(
+  incidence ~ i(year, fivekm, ref = '2008') | # time*treatment interaction
+    key + year, # fixed effects
+  data = dengue_tutorial_df)
 
 # look at output
-summary(dengue_yearly_model_FEs)
-etable(dengue_yearly_model_FEs)
-iplot(dengue_yearly_model_FEs, 
+summary(dengue_tutorial_df_model_FEs)
+etable(dengue_tutorial_df_model_FEs)
+iplot(dengue_tutorial_df_model_FEs, 
       main = "Effect on dengue incidence",
       xlab= "Year", ylab = "Effect (relative to 2008)")
 ```
@@ -142,17 +145,17 @@ Finally, let's add in control variables. Here, we include urban area, agricultur
 
 ```{r}
 # run model
-dengue_yearly_model_full <- feols(
-  incidence ~ i(year_chr, fivekm, ref = '2008') + # time*treatment interaction
+dengue_tutorial_df_model_full <- feols(
+  incidence ~ i(year, fivekm, ref = '2008') + # time*treatment interaction
     urban + ag + sum_precip_centered + #controls
     mean_temp_centered + mean_temp_centered_sq | 
-    key + year_chr, # fixed effects
-  data = dengue_yearly)
+    key + year, # fixed effects
+  data = dengue_tutorial_df)
 
 # look at output
-summary(dengue_yearly_model_full)
-etable(dengue_yearly_model_full)
-iplot(dengue_yearly_model_full, 
+summary(dengue_tutorial_df_model_full)
+etable(dengue_tutorial_df_model_full)
+iplot(dengue_tutorial_df_model_full, 
       main = "Effect on dengue incidence",
       xlab= "Year", ylab = "Effect (relative to 2008)")
 ```
@@ -165,9 +168,9 @@ The main change is how we construct the 'time' column. To build the long differe
 
 ```{r}
 # create new treatment variable for long difference model
-dengue_df_agg <- dengue_yearly %>%
-  filter(as.Date(year) > as.Date("2007-01-01")) %>%
-  mutate(year_binary = if_else(as.Date(year) > as.Date("2008-01-01"), 1, 0))
+dengue_df_agg <- dengue_tutorial_df %>%
+  filter(year %in% as.character(c(2008:2022))) %>%
+  mutate(year_binary = if_else(year == "2008", 0, 1))
 
 # run model
 dengue_long_difference_model <- feols(
@@ -182,7 +185,7 @@ summary(dengue_long_difference_model)
 etable(dengue_long_difference_model)
 
 # our average treatment effect across the time period
-coef(dengue_long_difference_model)[6] 
+coef(dengue_long_difference_model)[6]
 ```
 
 If you have extra time, you can try running the models for leishmaniasis as well! Alternatively, you can look through the full GitHub code and try out some of the other models, such as the biannual (**code/07_main_models_fixest.R**) or distance heterogeneity analyses (**code/10_distance_het_models.R**). Note you will have to download the full dataset to build the distance heterogeneity models. Project repository here: https://github.com/alyson-singleton/IOH_and_dengue.
