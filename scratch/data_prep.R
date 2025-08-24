@@ -64,7 +64,7 @@ leish_tutorial_df <- leish_yearly$connected_buffered %>%
   )
 
 # Save data
-saveRDS(dengue_tutorial_df, file = "dengue_tutorial_df.rds")
+saveRDS(dengue_tutorial_df, file = "data/dengue_tutorial_df.rds")
 saveRDS(dengue_tutorial_df_english, file = "scratch/dengue_tutorial_df_english.rds")
-saveRDS(leish_tutorial_df, file = "leish_tutorial_df.rds")
+saveRDS(leish_tutorial_df, file = "data/leish_tutorial_df.rds")
 saveRDS(leish_tutorial_df_english, file = "scratch/leish_tutorial_df_english.rds")
