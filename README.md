@@ -8,8 +8,8 @@ Este tutorial fue escrito para un taller impartido en Lima, Perú, en agosto de 
 
 Puede encontrar otros recursos sobre DeD (DiD) aquí:
 
--   [Columbia University](https://www.publichealth.columbia.edu/research/population-health-methods/difference-difference-estimation){.uri}: Difference-in-Difference Estimation
--   [Berge and McDermott, 2025](https://lrberge.github.io/fixest/articles/fixest_walkthrough.html#interactions-that-dont-involve-fixed-effects){.uri}: Fast Fixed-Effects Estimation: Short Introduction (véase la sección "Simple difference-in-differences")
+-   [Columbia University](https://www.publichealth.columbia.edu/research/population-health-methods/difference-difference-estimation): Difference-in-Difference Estimation
+-   [Berge and McDermott, 2025](https://lrberge.github.io/fixest/articles/fixest_walkthrough.html#interactions-that-dont-involve-fixed-effects): Fast Fixed-Effects Estimation: Short Introduction (véase la sección "Simple difference-in-differences")
 -   [Rothbard et al., 2023](https://link.springer.com/article/10.1007/s40471-023-00327-x?utm_source=chatgpt.com): A Tutorial on Applying the Difference-in-Differences Method to Health Data
 
 ------------------------------------------------------------------------
