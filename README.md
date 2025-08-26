@@ -1,6 +1,6 @@
 > Tutorial para: [*Highway paving increased dengue transmission in the Peruvian Amazon.*](https://www.medrxiv.org/content/10.1101/2024.11.15.24317406v1) Preprint, 2024. Código escrito por Alyson Singleton.
 >
-> Si tiene alguna pregunta, no dude en enviarme un correo electrónico a [asinglet\@stanford.edu](mailto:asinglet@stanford.edu){.email}.
+> Si tiene alguna pregunta, no dude en enviarme un correo electrónico a [asinglet\@stanford.edu](mailto:asinglet@stanford.edu).
 
 ## Diferencias-en-diferencias (DeD) / Difference-in-differences (DiD)
 
