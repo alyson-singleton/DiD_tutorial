@@ -2,7 +2,7 @@
 >
 > Si tiene alguna pregunta, no dude en enviarme un correo electrónico a [asinglet\@stanford.edu](mailto:asinglet@stanford.edu).
 
-## Diferencias-en-diferencias (DeD) / Difference-in-differences (DiD)
+## Diferencia-en-diferencias (DeD) / Difference-in-differences (DiD)
 
 Este tutorial fue escrito para un taller impartido en Lima, Perú, en agosto de 2025. En él se explica el análisis principal del proyecto mencionado anteriormente. Puede encontrar el código completo y los datos de todo el proyecto aquí: <https://github.com/alyson-singleton/IOH_and_dengue>.
 
